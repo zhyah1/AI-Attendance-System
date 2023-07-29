@@ -2,6 +2,9 @@ import cv2
 import numpy as np
 import face_recognition
 import mediapipe as mp
+import csv
+from datetime import datetime
+import os
 
 class MpDetector:
     def __init__(self):
@@ -37,14 +40,6 @@ class MpDetector:
 
         return len(face_crops) > 0, face_crops, start_points
 
-
-def generate_embedding(cropped_image, bgr=False):
-    if bgr:
-        cropped_image = cropped_image[:, :, ::-1]
-    height, width, _ = cropped_image.shape
-    return face_recognition.face_encodings(cropped_image, known_face_locations=[(0, width, height, 0)])[0]
-
-
 def load_known_faces():
     face_embeddings_path = "face_embeddings.npz"
 
@@ -52,7 +47,6 @@ def load_known_faces():
     known_face_embeddings = known_face_data['embeddings']
     known_face_names = known_face_data['names']
     return known_face_embeddings, known_face_names
-
 
 def identify_faces(known_face_embeddings, known_face_names, face_crops):
     recognized_faces = []
@@ -70,6 +64,31 @@ def identify_faces(known_face_embeddings, known_face_names, face_crops):
 
     return recognized_faces
 
+def generate_embedding(cropped_image, bgr=False):
+    if bgr:
+        cropped_image = cropped_image[:, :, ::-1]
+    height, width, _ = cropped_image.shape
+    return face_recognition.face_encodings(cropped_image, known_face_locations=[(0, width, height, 0)])[0]
+
+def mark_attendance(student_id, student_name, attendance_date):
+    attendance_folder = "attendance"
+    os.makedirs(attendance_folder, exist_ok=True)
+    file_path = os.path.join(attendance_folder, f"{attendance_date}.csv")
+
+    if not os.path.exists(file_path):
+        with open(file_path, "w", newline='') as file:
+            writer = csv.writer(file)
+            writer.writerow(["Student ID", "Student Name", "Timestamp"])
+
+    with open(file_path, "r", newline='') as file:
+        reader = csv.reader(file)
+        for row in reader:
+            if row and row[0] == student_id and row[1] == student_name:
+                return  # Attendance already marked for the student on the same day
+
+    with open(file_path, "a", newline='') as file:
+        writer = csv.writer(file)
+        writer.writerow([student_id, student_name, datetime.now().strftime('%Y-%m-%d %H:%M:%S')])
 
 def display_faces(recognized_faces, frame):
     for person_name in recognized_faces:
@@ -93,6 +112,13 @@ def main():
 
         if len(face_crops) > 0:
             recognized_faces = identify_faces(known_face_embeddings, known_face_names, face_crops)
+
+            for person_name in recognized_faces:
+                student_id = person_name[0]
+                student_name = person_name[1]
+                attendance_date = datetime.now().strftime('%Y-%m-%d')
+                mark_attendance(student_id, student_name, attendance_date)
+
             display_faces(recognized_faces, frame)
 
         cv2.imshow("Face Recognition", frame)
