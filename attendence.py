@@ -57,10 +57,12 @@ def identify_faces(known_face_embeddings, known_face_names, face_crops):
         min_distance_index = np.argmin(face_distances)
         min_distance = face_distances[min_distance_index]
 
-        if min_distance < 0.5:
-            recognized_faces.append((known_face_names[min_distance_index]))
+        if min_distance < 0.45:
+            student_id = known_face_names[min_distance_index]
+            complete_person_name = get_complete_person_name(student_id)
+            recognized_faces.append((student_id, complete_person_name))
         else:
-            recognized_faces.append(('Unknown'))
+            recognized_faces.append(('Unknown', 'Unknown'))
 
     return recognized_faces
 
@@ -70,7 +72,15 @@ def generate_embedding(cropped_image, bgr=False):
     height, width, _ = cropped_image.shape
     return face_recognition.face_encodings(cropped_image, known_face_locations=[(0, width, height, 0)])[0]
 
-def mark_attendance(student_id, student_name, attendance_date):
+def get_complete_person_name(student_id):
+    # Replace this function with your logic to retrieve the complete person name using the student_id
+    # For now, we'll assume the complete person name is the same as the student_id
+    return student_id
+
+def mark_attendance(student_id, complete_person_name, attendance_date):
+    if student_id == 'Unknown':
+        return  # Skip saving attendance for unknown persons
+
     attendance_folder = "attendance"
     os.makedirs(attendance_folder, exist_ok=True)
     file_path = os.path.join(attendance_folder, f"{attendance_date}.csv")
@@ -78,21 +88,23 @@ def mark_attendance(student_id, student_name, attendance_date):
     if not os.path.exists(file_path):
         with open(file_path, "w", newline='') as file:
             writer = csv.writer(file)
-            writer.writerow(["Student ID", "Student Name", "Timestamp"])
+            writer.writerow(["Student ID", "Complete Person Name", "Timestamp"])
 
     with open(file_path, "r", newline='') as file:
         reader = csv.reader(file)
         for row in reader:
-            if row and row[0] == student_id and row[1] == student_name:
+            if row and row[0] == student_id and row[1] == complete_person_name:
                 return  # Attendance already marked for the student on the same day
 
     with open(file_path, "a", newline='') as file:
         writer = csv.writer(file)
-        writer.writerow([student_id, student_name, datetime.now().strftime('%Y-%m-%d %H:%M:%S')])
+        writer.writerow([student_id, complete_person_name, datetime.now().strftime('%Y-%m-%d %H:%M:%S')])
+ 
+    print(student_id, complete_person_name, attendance_date)
 
 def display_faces(recognized_faces, frame):
-    for person_name in recognized_faces:
-        print(person_name)
+    for student_id, complete_person_name in recognized_faces:
+        print(f"Student ID: {student_id}, Complete Person Name: {complete_person_name}")
 
 def main():
     known_face_embeddings, known_face_names = load_known_faces()
@@ -113,13 +125,11 @@ def main():
         if len(face_crops) > 0:
             recognized_faces = identify_faces(known_face_embeddings, known_face_names, face_crops)
 
-            for person_name in recognized_faces:
-                student_id = person_name[0]
-                student_name = person_name[1]
+            for student_id, complete_person_name in recognized_faces:
                 attendance_date = datetime.now().strftime('%Y-%m-%d')
-                mark_attendance(student_id, student_name, attendance_date)
+                mark_attendance(student_id, complete_person_name, attendance_date)
 
-            display_faces(recognized_faces, frame)
+            # display_faces(recognized_faces, frame)
 
         cv2.imshow("Face Recognition", frame)
 
